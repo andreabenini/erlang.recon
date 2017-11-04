@@ -150,6 +150,7 @@ triple_to_pid(X, Y, Z) ->
 term_to_pid(Pid) when is_pid(Pid) -> Pid;
 term_to_pid(Name) when is_atom(Name) -> whereis(Name);
 term_to_pid(List = "<0."++_) -> list_to_pid(List);
+term_to_pid(Binary = <<"<0.", _/binary>>) -> list_to_pid(binary_to_list(Binary));
 term_to_pid({global, Name}) -> global:whereis_name(Name);
 term_to_pid({via, Module, Name}) -> Module:whereis_name(Name);
 term_to_pid({X,Y,Z}) when is_integer(X), is_integer(Y), is_integer(Z) ->
@@ -211,12 +212,14 @@ time_fold(N, Interval, Fun, State, FoldFun, Init) ->
 
 %% @doc Diffs two runs of erlang:statistics(scheduler_wall_time) and
 %% returns usage metrics in terms of cores and 0..1 percentages.
--spec scheduler_usage_diff(SchedTime, SchedTime) -> [{SchedulerId, Usage}] when
+-spec scheduler_usage_diff(SchedTime, SchedTime) -> undefined | [{SchedulerId, Usage}] when
     SchedTime :: [{SchedulerId, ActiveTime, TotalTime}],
     SchedulerId :: pos_integer(),
     Usage :: number(),
     ActiveTime :: non_neg_integer(),
     TotalTime :: non_neg_integer().
+scheduler_usage_diff(First, Last) when First =:= undefined orelse Last =:= undefined ->
+    undefined;
 scheduler_usage_diff(First, Last) ->
     lists:map(
         fun ({{I, _A0, T}, {I, _A1, T}}) -> {I, 0.0}; % Avoid divide by zero
