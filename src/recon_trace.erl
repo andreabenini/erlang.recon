@@ -185,7 +185,7 @@
 -export([format/1]).
 
 %% Internal exports
--export([count_tracer/1, rate_tracer/2, formatter/5, format_trace_output/2]).
+-export([count_tracer/1, rate_tracer/2, formatter/5, format_trace_output/1, format_trace_output/2]).
 
 -type matchspec()    :: [{[term()], [term()], [term()]}].
 -type shellfun()     :: fun((_) -> term()).
@@ -525,6 +525,9 @@ format(TraceMsg) ->
         %% {trace, Pid, call, {M, F, Args}}
         {call, [{M,F,Args}]} ->
             {"~p:~p~s", [M,F,format_args(Args)]};
+        %% {trace, Pid, call, {M, F, Args}, Msg}
+        {call, [{M,F,Args}, Msg]} ->
+            {"~p:~p~s ~s", [M,F,format_args(Args), format_trace_output(Msg)]};
         %% {trace, Pid, return_to, {M, F, Arity}}
         {return_to, [{M,F,Arity}]} ->
             {" '--> ~p:~p/~p", [M,F,Arity]};
@@ -607,36 +610,76 @@ to_hms(_) ->
 format_args(Arity) when is_integer(Arity) ->
     [$/, integer_to_list(Arity)];
 format_args(Args) when is_list(Args) ->
-    Active = recon_rec:is_active(),
-    [$(, join(", ", [format_trace_output(Active, Arg) || Arg <- Args]), $)].
+    [$(, join(", ", [format_trace_output(Arg) || Arg <- Args]), $)].
 
 
 %% @doc formats call arguments and return values - most types are just printed out, except for
 %% tuples recognised as records, which mimic the source code syntax
 %% @end
 format_trace_output(Args) ->
-    format_trace_output(recon_rec:is_active(), Args).
+    format_trace_output(recon_rec:is_active(), recon_map:is_active(), Args).
 
-format_trace_output(true, Args) when is_tuple(Args) ->
+format_trace_output(Recs, Args) ->
+    format_trace_output(Recs, recon_map:is_active(), Args).
+
+format_trace_output(true, _, Args) when is_tuple(Args) ->
     recon_rec:format_tuple(Args);
-format_trace_output(true, Args) when is_list(Args) ->
+format_trace_output(false, true, Args) when is_tuple(Args) ->
+    format_tuple(false, true, Args);
+format_trace_output(Recs, Maps, Args) when is_list(Args), Recs orelse Maps ->
     case io_lib:printable_list(Args) of
         true ->
             io_lib:format("~p", [Args]);
         false ->
-            L = lists:map(fun(A) -> format_trace_output(true, A) end, Args),
-            [$[, join(", ", L), $]]
+            format_maybe_improper_list(Recs, Maps, Args)
     end;
-format_trace_output(true, Args) when is_map(Args) ->
+format_trace_output(Recs, true, Args) when is_map(Args) ->
+    {Label, Map} = case recon_map:process_map(Args) of
+                       {L, M} -> {atom_to_list(L), M};
+                       M -> {"", M}
+                   end,
+    ItemList = maps:to_list(Map),
+    [Label,
+     "#{",
+        join(", ", [format_kv(Recs, true, Key, Val) || {Key, Val} <- ItemList]),
+    "}"];
+format_trace_output(Recs, false, Args) when is_map(Args) ->
     ItemList = maps:to_list(Args),
     ["#{",
-        join(", ", [format_kv(Key, Val) || {Key, Val} <- ItemList]),
+        join(", ", [format_kv(Recs, false, Key, Val) || {Key, Val} <- ItemList]),
     "}"];
-format_trace_output(_, Args) ->
+format_trace_output(_, _, Args) ->
     io_lib:format("~p", [Args]).
 
-format_kv(Key, Val) ->
-    [format_trace_output(true, Key), "=", format_trace_output(true, Val)].
+format_kv(Recs, Maps, Key, Val) ->
+    [format_trace_output(Recs, Maps, Key), "=>", format_trace_output(Recs, Maps, Val)].
+
+
+format_tuple(Recs, Maps, Tup) ->
+    [${ | format_tuple_(Recs, Maps, tuple_to_list(Tup))].
+
+format_tuple_(_Recs, _Maps, []) ->
+    "}";
+format_tuple_(Recs, Maps, [H|T]) ->
+    [format_trace_output(Recs, Maps, H), $,,
+     format_tuple_(Recs, Maps, T)].
+
+
+format_maybe_improper_list(Recs, Maps, List) ->
+    [$[ | format_maybe_improper_list_(Recs, Maps, List)].
+
+format_maybe_improper_list_(_, _, []) ->
+    "]";
+format_maybe_improper_list_(Recs, Maps, [H|[]]) ->
+    [format_trace_output(Recs, Maps, H), $]];
+format_maybe_improper_list_(Recs, Maps, [H|T]) when is_list(T) ->
+    [format_trace_output(Recs, Maps, H), $,,
+     format_maybe_improper_list_(Recs, Maps, T)];
+format_maybe_improper_list_(Recs, Maps, [H|T]) when not is_list(T) ->
+    %% Handling improper lists
+    [format_trace_output(Recs, Maps, H), $|,
+     format_trace_output(Recs, Maps, T), $]].
+
 
 %%%%%%%%%%%%%%%
 %%% HELPERS %%%
@@ -677,6 +720,7 @@ fun_to_ms(ShellFun) when is_function(ShellFun) ->
         false ->
             exit(shell_funs_only)
     end.
+
 
 -ifdef(OTP_RELEASE).
 -spec join(term(), [term()]) -> [term()].
