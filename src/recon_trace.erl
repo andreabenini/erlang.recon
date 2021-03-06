@@ -187,7 +187,7 @@
 %% Internal exports
 -export([count_tracer/1, rate_tracer/2, formatter/5, format_trace_output/1, format_trace_output/2]).
 
--type matchspec()    :: [{[term()], [term()], [term()]}].
+-type matchspec()    :: [{[term()] | '_', [term()], [term()]}].
 -type shellfun()     :: fun((_) -> term()).
 -type formatterfun() :: fun((_) -> iodata()).
 -type millisecs()    :: non_neg_integer().
@@ -199,7 +199,7 @@
 -type options()      :: [ {pid, pidspec() | [pidspec(),...]} % default: all
                         | {timestamp, formatter | trace}     % default: formatter
                         | {args, args | arity}               % default: args
-                        | {io_server, pid()}                 % default: group_leader()
+                        | {io_server, pid() | atom()}        % default: group_leader()
                         | {formatter, formatterfun()}        % default: internal formatter
                         | return_to | {return_to, boolean()} % default: false
                    %% match pattern options

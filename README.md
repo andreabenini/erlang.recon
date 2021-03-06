@@ -14,7 +14,7 @@ It is recommended that you use tags if you do not want bleeding edge and develop
 Current Status
 --------------
 
-[![Build Status](https://travis-ci.org/ferd/recon.png)](https://travis-ci.org/ferd/recon)
+[![Build Status](https://github.com/ferd/recon/workflows/build/badge.svg)](https://github.com/ferd/recon)
 
 Versions supported: OTP-17 and up. Support of R16B03-1 down to R15B02 is best effort. Builds with Rebar3 require OTP-17.1 and up because that's what the tool supports.
 
@@ -27,6 +27,10 @@ all stable changes of the first version of Recon.
 
 *2.x*
 
+- 2.5.1
+  - Fix support for extra messages in traces (thanks to Péter Gömöri)
+  - Fix some typespecs for match specs (thanks to @chenduo)
+  - Support OTP-23 change of format in allocator blocks related to carrier migration support
 - 2.5.0
   - Optional formatting of records in traces (thanks to @bartekgorny)
   - Basic support for OTP-22 in `recon_alloc` (base handling of `foreign_blocks` type)
